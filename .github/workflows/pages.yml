@@ -1,0 +1,51 @@
+name: Deploy Pages (with LFS)
+on:
+  push:
+    branches: [ "main" ]   # ← デフォルトブランチに合わせて
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # 1) リポを取得（LFS有効）
+      - name: Checkout (with LFS)
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 0
+
+      # 2) LFSポインタを実体ファイルに展開（確実策）
+      - name: Ensure LFS files are present
+        run: git lfs checkout
+
+      # 3) 公開する静的ファイルだけを site/ に集める
+      - name: Prepare site
+        run: |
+          mkdir -p site/promo
+          cp -r promo/* site/promo/ 2>/dev/null || true
+          [ -f promo.json ] && cp promo.json site/ || true
+
+      # 4) Pages 用に設定→アーティファクトをアップロード→デプロイ
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
